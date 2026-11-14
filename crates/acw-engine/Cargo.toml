@@ -1,0 +1,36 @@
+[package]
+name = "acw-engine"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+acw-core = { version = "0.2.0", path = "../acw-core" }
+acw-git = { version = "0.2.0", path = "../acw-git" }
+acw-llm = { version = "0.2.0", path = "../acw-llm" }
+acw-sandbox = { version = "0.2.0", path = "../acw-sandbox" }
+aes = "0.9.4"
+anyhow = "1.0.104"
+async-trait = "0.1.92"
+axum = { version = "0.8.9", features = ["macros"] }
+base64 = "0.23.1"
+bytes = "1.12.1"
+cbc = "0.2.1"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+futures = "0.3.34"
+hex = "0.4.3"
+rand = "0.10.3"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-stream = "0.1.19"
+tokio-util = "0.7.20"
+toml = "1.2.1"
+tower-http = { version = "0.7.1", features = ["fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

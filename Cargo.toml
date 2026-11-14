@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/acw-core", "crates/acw-llm", "crates/acw-sandbox", "crates/acw-git", "crates/acw-engine"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[profile.dev]
+debug = 1
+[profile.release]
+lto = "thin"

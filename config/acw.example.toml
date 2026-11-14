@@ -1,0 +1,59 @@
+# Auto-CodWorker Engine 配置示例。密钥不要写在这里：这里只写存放密钥的环境变量名。
+
+listen = "0.0.0.0:8787"
+data_dir = "/var/lib/acw/data"          # 事件库、镜像仓库、产物
+console_dir = "/opt/acw/console"        # 控制台静态文件
+public_url = "https://acw.example.com"  # 通知里的链接用
+gateway_url = "http://10.0.0.5:8787"    # 沙箱访问模型网关的地址，要能从 microVM 里访问到
+auth = "token"                          # token：要成员令牌；none：所有人都是第一个管理员，只用于开发
+issues_token_env = "ACW_ISSUE_TOKEN"    # 监控往 /webhooks/issues 报线上问题时用的令牌
+
+[forge]
+kind = "github"                         # github 或 local
+api = "https://api.github.com"
+token_env = "GITHUB_TOKEN"              # 需要仓库的 contents 和 pull requests 读写权限
+webhook_secret_env = "GITHUB_WEBHOOK_SECRET"
+poll_seconds = 60                       # 没配 webhook 时靠它发现 PR 被合并
+
+[sandbox]
+provider = "firecracker"                # firecracker、local，或 remote（沙箱在别的机器上，见 docs/sandbox-host.md）
+allow_unisolated = false                # local 没有隔离，默认拒绝；只在开发机上改成 true
+egress = []                             # 沙箱能访问的 host:port，例如包镜像 "10.0.0.8:3128"；模型网关会自动加上
+
+[sandbox.firecracker]
+bin = "firecracker"
+kernel = "/var/lib/acw/vmlinux"
+templates = "/var/lib/acw/templates"    # <templates>/<模板名>/rootfs.ext4
+default_template = "base"
+ssh_key = "/var/lib/acw/id_ed25519"
+vcpus = 2
+mem_mib = 4096
+net_prefix = "172.30"                   # 第 N 个沙箱用 172.30.N.0/30
+host_name = "node-1"
+
+[sandbox.remote]                        # provider = "remote" 时用
+hosts = []                              # 跑着 acw-engine sandbox-host 的机器，例如 ["http://10.0.1.11:8790"]
+token_env = "ACW_SANDBOX_TOKEN"         # 和沙箱主机共用的令牌
+
+[worker]
+agent = "codex"                         # codex 或 scripted（跑 scripted_cmd，测试和演示用）
+codex_bin = "codex"
+run_minutes = 60                        # Worker 一次运行的上限
+idle_minutes = 15                       # 这么久没有输出算卡住，重启，最多 2 次
+command_minutes = 20                    # 一条项目命令（构建、测试、E2E）的上限
+retry_seconds = 60                      # 模型不可用时隔多久再试
+
+[feishu]
+webhook_env = "FEISHU_WEBHOOK"          # 出站通知：飞书自定义机器人的 webhook 地址；不配就只记录不发送
+# 入站消息（在飞书里给机器人发需求）。协议没有对着官方文档核对过，接之前先看 docs/feishu.md
+base = "https://open.feishu.cn"
+app_id_env = "FEISHU_APP_ID"
+app_secret_env = "FEISHU_APP_SECRET"
+verify_token_env = "FEISHU_VERIFY_TOKEN"
+encrypt_key_env = "FEISHU_ENCRYPT_KEY"
+bot_name = ""                           # 机器人的显示名；配了以后群里只有 @ 这个名字才算
+
+[standby]                               # 热备，见 docs/standby.md。单机部署不用写
+primary = ""                            # 备机上写主机的地址；主机上留空
+peers = []                              # 对端的地址：主机看到对端成了任期更高的主机，自己就停止接受操作
+token_env = "ACW_REPLICA_TOKEN"         # 两台机器共用的复制令牌

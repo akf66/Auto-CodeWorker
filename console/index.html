@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auto-CodWorker 控制台</title>
+<meta name="description" content="Auto-CodWorker 控制台：等人处理的事项、任务时间线与完成条件、路由记录、成本和设置。">
+<link rel="preload" href="./fonts/red-hat-text-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要内容</a>
+<div class="shell" id="shell">
+  <aside class="side" id="side" aria-label="主导航">
+    <a class="wordmark" href="#overview" aria-label="Auto-CodWorker 总览">Auto-CodWorker</a>
+    <nav class="nav-group" aria-label="工作">
+      <ul class="nav" id="nav-work"></ul>
+    </nav>
+    <nav class="nav-group" aria-label="项目">
+      <span>项目</span>
+      <ul class="nav" id="nav-proj"></ul>
+    </nav>
+    <nav class="nav-group" aria-label="系统">
+      <span>系统</span>
+      <ul class="nav" id="nav-sys"></ul>
+    </nav>
+    <nav class="nav-group" aria-label="管理">
+      <span>管理</span>
+      <ul class="nav" id="nav-admin"></ul>
+    </nav>
+    <div class="side-foot">
+      <span id="whoami"></span>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="bar">
+      <button class="btn btn--line menu-btn" type="button" id="menu-btn" aria-expanded="false" aria-controls="side">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>菜单
+      </button>
+      <div class="crumbs" id="crumbs"></div>
+      <div class="spacer"></div>
+      <span class="live" id="live" role="status" aria-live="off"></span>
+    </header>
+    <main id="main" class="page" tabindex="-1">
+      <noscript><p>控制台需要开启 JavaScript。</p></noscript>
+    </main>
+  </div>
+</div>
+<div id="toast-root" aria-live="polite"></div>
+<script src="./app.js"></script>
+</body>
+</html>
