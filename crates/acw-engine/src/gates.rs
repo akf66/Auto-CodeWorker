@@ -121,17 +121,34 @@ struct RawFinding {
     title: String,
     #[serde(default)]
     file: String,
+    /// A number, a numeric string, or missing: models are loose about this.
     #[serde(default)]
-    line: u32,
+    line: serde_json::Value,
     #[serde(default)]
     evidence: String,
 }
 
-#[derive(Deserialize)]
 struct GenTest {
     criterion: u32,
     path: String,
     content: String,
+}
+
+/// The tester model's reply, read item by item. Accepts "1" as well as 1 for the criterion: real
+/// models are loose about number types, and one odd item must not throw the whole reply away.
+/// Returns the usable tests and how many items the reply offered.
+fn parse_gen_tests(reply: &str, dir: &str, criteria: usize) -> (Vec<GenTest>, usize) {
+    let items = extract_json(reply).ok().and_then(|v| v.get("tests").and_then(|x| x.as_array().cloned())).unwrap_or_default();
+    let tests = items
+        .iter()
+        .filter_map(|x| {
+            let c = x.get("criterion")?;
+            let criterion = c.as_u64().or_else(|| c.as_str()?.trim().trim_end_matches('.').parse().ok())? as u32;
+            Some(GenTest { criterion, path: x.get("path")?.as_str()?.to_owned(), content: x.get("content")?.as_str()?.to_owned() })
+        })
+        .filter(|g| g.path.starts_with(&format!("{dir}/")) && !g.path.split('/').any(|s| s == "..") && g.criterion >= 1 && (g.criterion as usize) <= criteria)
+        .collect();
+    (tests, items.len())
 }
 
 impl Engine {
@@ -247,7 +264,8 @@ impl Engine {
         let mut findings: Vec<Finding> = Vec::new();
         for r in raw.into_iter().filter(|r| !r.title.trim().is_empty()) {
             let severity = if ["p0", "p1", "p2", "p3"].contains(&r.severity.to_lowercase().as_str()) { r.severity.to_lowercase() } else { "p2".to_owned() };
-            let mut f = Finding { fingerprint: fingerprint(&r.file, &r.title), severity, title: r.title, file: r.file, line: r.line, evidence: r.evidence, confirmed: false, status: "open".into(), round };
+            let line = r.line.as_u64().or_else(|| r.line.as_str()?.trim().parse().ok()).unwrap_or(0) as u32;
+            let mut f = Finding { fingerprint: fingerprint(&r.file, &r.title), severity, title: r.title, file: r.file, line, evidence: r.evidence, confirmed: false, status: "open".into(), round };
             if f.severity == "p0" || f.severity == "p1" {
                 // a blocking finding must survive a second, independent look
                 let ask = json!({ "finding": { "severity": f.severity, "title": f.title, "file": f.file, "line": f.line, "evidence": f.evidence }, "diff": diff });
@@ -309,13 +327,13 @@ impl Engine {
         let user = json!({ "project": p.name, "dir": tg.dir, "framework": tg.hint, "goal": t.mandate.goal, "accept": t.mandate.accept.iter().enumerate().map(|(i, a)| format!("{}. {a}", i + 1)).collect::<Vec<_>>() });
         let reply = self.stage_chat("tester", Some(&t.id), &[Msg::system(TESTER_PROMPT), Msg::user(user.to_string())], true, None).await?;
         let dir = tg.dir.trim_end_matches('/');
-        let tests: Vec<GenTest> = extract_json(&reply)
-            .ok()
-            .and_then(|v| serde_json::from_value::<Vec<GenTest>>(v.get("tests").cloned().unwrap_or_default()).ok())
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|g| g.path.starts_with(&format!("{dir}/")) && !g.path.split('/').any(|s| s == "..") && g.criterion >= 1 && (g.criterion as usize) <= t.mandate.accept.len())
-            .collect();
+        let (tests, offered) = parse_gen_tests(&reply, dir, t.mandate.accept.len());
+        if tests.is_empty() {
+            // nothing usable: say so and do not cache, so the next run asks the model again
+            tracing::warn!("{}：写测试的模型没有给出可用的测试（回复里有 {} 项）", t.id, offered);
+            self.step(&t.id, "log", "写测试的模型没有给出可用的验收测试", &reply);
+            return Ok(tests);
+        }
         let dump: Vec<_> = tests.iter().map(|g| json!({ "criterion": g.criterion, "path": g.path, "content": g.content })).collect();
         let _ = tokio::fs::create_dir_all(self.artifacts(&t.id)).await;
         let _ = tokio::fs::write(&cache, serde_json::to_vec_pretty(&dump).unwrap_or_default()).await;
@@ -528,6 +546,16 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generated_tests_survive_loose_number_types_and_odd_items() {
+        // what deepseek-v4-flash actually returned: criterion as a string
+        let reply = r#"{"tests":[{"criterion":"1","path":"tests/a.sh","content":"x"},{"criterion":2,"path":"tests/b.sh","content":"y"},{"criterion":"two","path":"tests/c.sh","content":"z"},{"criterion":1,"path":"../evil.sh","content":"z"},{"criterion":9,"path":"tests/d.sh","content":"z"}]}"#;
+        let (tests, offered) = parse_gen_tests(reply, "tests", 2);
+        assert_eq!(offered, 5);
+        assert_eq!(tests.iter().map(|g| (g.criterion, g.path.as_str())).collect::<Vec<_>>(), [(1, "tests/a.sh"), (2, "tests/b.sh")]);
+        assert_eq!(parse_gen_tests("not json", "tests", 2).1, 0);
+    }
 
     fn project() -> Project {
         Project {

@@ -73,7 +73,16 @@ enum Cmd {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())).init();
     match Cli::parse().cmd {
-        Cmd::Serve { config } => serve(build(Config::load(&config)?)?).await,
+        Cmd::Serve { config } => {
+            let eng = build(Config::load(&config)?)?;
+            // personal use: without logins there is nobody to `init`, so the first start makes the owner
+            if eng.cfg.auth == "none" && eng.is_primary() && eng.store.read(|v| v.members())?.is_empty() {
+                let me = Member { id: "me".into(), name: "我".into(), feishu: None, github: None, roles: BTreeMap::from([("*".to_owned(), Role::Admin)]), queue_limit: None, delegate: None };
+                eng.upsert_member(&Actor::system("init"), me)?;
+                tracing::info!("auth = \"none\"：已创建管理员 me，所有请求都以它的身份执行");
+            }
+            serve(eng).await
+        }
         Cmd::Init { config, id, name, github } => {
             let eng = build(Config::load(&config)?)?;
             let member = Member { id: id.clone(), name, feishu: None, github, roles: BTreeMap::from([("*".to_owned(), Role::Admin)]), queue_limit: None, delegate: None };

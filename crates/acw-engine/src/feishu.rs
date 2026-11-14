@@ -78,7 +78,6 @@ pub enum Answer {
 /// A text message for the bot.
 #[derive(Debug, PartialEq)]
 pub struct Message {
-    pub event_id: String,
     pub message_id: String,
     pub sender: String,
     pub chat: String,
@@ -119,7 +118,7 @@ pub fn parse_message(v: &Value, bot_name: &str) -> Option<Message> {
     let message_id = msg["message_id"].as_str()?.to_owned();
     let chat = msg["chat_id"].as_str()?.to_owned();
     let root = msg["root_id"].as_str().filter(|r| !r.is_empty()).unwrap_or(&message_id).to_owned();
-    Some(Message { event_id: v["header"]["event_id"].as_str().unwrap_or(&message_id).to_owned(), sender: ev["sender"]["sender_id"]["open_id"].as_str()?.to_owned(), thread: format!("feishu:{chat}:{root}"), chat, message_id, text })
+    Some(Message { sender: ev["sender"]["sender_id"]["open_id"].as_str()?.to_owned(), thread: format!("feishu:{chat}:{root}"), chat, message_id, text })
 }
 
 impl Engine {
@@ -161,12 +160,13 @@ impl Engine {
             return Ok(Answer::Challenge(v["challenge"].as_str().unwrap_or_default().to_owned()));
         }
         let Some(msg) = parse_message(&v, &self.cfg.feishu.bot_name) else { return Ok(Answer::Accepted) };
-        // the platform redelivers when it does not get an answer in time: act once per event id
+        // the platform redelivers when it does not get an answer in time. Its docs say to deduplicate
+        // message events by message id, not event id
         let first = self.store.write(|tx| {
-            if tx.view().inbound_seen("feishu", &msg.event_id)? {
+            if tx.view().inbound_seen("feishu", &msg.message_id)? {
                 return Ok(false);
             }
-            tx.emit("feishu", None, Event::InboundSeen { source: "feishu".into(), id: msg.event_id.clone() })?;
+            tx.emit("feishu", None, Event::InboundSeen { source: "feishu".into(), id: msg.message_id.clone() })?;
             Ok(true)
         })?;
         if first {

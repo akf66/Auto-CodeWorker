@@ -4,7 +4,9 @@
 
 这是 v0.2。v0.1 的核心链路之外，加了计划与跨仓库 PR 组、分阶段上线、非功能验收的证据、架构变化核对、项目记忆、代码索引、环境计划、Router 评测集、飞书入站、热备和远程沙箱主机，都有测试。
 
-还没有在真实环境里跑过的：Firecracker 沙箱、GitHub、飞书、真实模型。其中飞书入站的协议是凭记忆写的，没有对着官方文档核对过。有几项做成了比设计简单的版本（代码索引是正则版不是 SCIP，高可用是手动切换的热备不是 Raft，云沙箱没有写）。每一项的状态、怎么验证的、和设计差在哪里，都在 [docs/status.md](docs/status.md)。
+这是一个个人使用的项目：目标是自己用着顺手，不追求高并发、高可用和多租户安全。
+
+在真实环境里跑通过的：真实 codex CLI、OrcaRouter 上的真实模型、GitHub 私有仓库，从一条消息走到 PR 合并（本机目录当沙箱）。还没接过真实环境的：飞书（协议对过官方文档）、Firecracker 沙箱。有几项做成了比设计简单的版本（代码索引是正则版不是 SCIP），有几项有意不做（自动选主、云沙箱、KMS）。每一项的状态都在 [docs/status.md](docs/status.md)。
 
 ## 一分钟跑起来
 
@@ -66,7 +68,7 @@ cargo build --release
 | `config/` | 配置示例 |
 | `docs/` | 状态表、架构、接口、PoC 结论、Firecracker 验证清单、热备、远程沙箱主机、飞书 |
 
-约 11,400 行 Rust（另有约 1,500 行测试），950 行控制台脚本，83 个自动化测试，另有一个用真实 codex CLI 的 PoC 测试。
+约 11,400 行 Rust（另有约 1,500 行测试），950 行控制台脚本，85 个自动化测试，另有一个用真实 codex CLI 的 PoC 测试。
 
 ## 几条设计上的硬规则
 
@@ -76,7 +78,25 @@ cargo build --release
 - **来源决定是不是指令。** 成员的消息、确认过的需求单是指令；PR 上没有权限的人写的评论只当数据传给 Worker，并标记任务“读过外部内容”。
 - **不自动合并。**
 
-## 部署到真实环境
+## 自己用（真实模型和 GitHub）
+
+需要装好 codex CLI 和 gh（或者自己准备一个有仓库读写权限的 GitHub 令牌）。
+
+```sh
+cargo build --release
+export GITHUB_TOKEN=$(gh auth token)
+./target/release/acw-engine serve --config config/acw.personal.toml
+```
+
+打开 http://127.0.0.1:8787 ，不用登录（第一次启动会自动建一个管理员 `me`）：
+
+1. 设置 → 模型接入：加接入（Base URL 写到 `/v1`，填 key，接口类型选接入支持的那种，OrcaRouter 选 Responses），再给“路由、开发、审查、写测试”各选模型。想让预算和成本页起作用，把模型价格也填上。
+2. 项目 → 接入项目：填项目卡（仓库的 https 克隆地址、`owner/name`、构建和测试命令、受保护的测试目录）。
+3. 在“对话”里发需求。任务走到“等你审批”后去 GitHub 上看 PR、合并，Engine 半分钟内会发现并结束任务。
+
+这种配法的沙箱是本机上的一个目录，没有隔离，只用在自己的机器和自己信任的仓库上。
+
+## 部署成多人用的服务
 
 1. 写配置：复制 `config/acw.example.toml`，按注释改。密钥放环境变量（`GITHUB_TOKEN`、`GITHUB_WEBHOOK_SECRET`、`FEISHU_WEBHOOK` 等），不写进文件。
 2. 建第一个管理员：`acw-engine init --config acw.toml --id kai --name KaifengAn --github akf66`，记下打印的令牌。
@@ -84,15 +104,15 @@ cargo build --release
 4. 设置 → 模型接入：加接入（https 的 Base URL 和 key），再给“路由、开发、审查、写测试”各选模型，填模型价格。
 5. 项目 → 接入项目：填项目卡（仓库、别名、模块与需确认规则、沙箱里跑的命令、受保护的测试目录）。
 6. GitHub 仓库加 webhook：地址 `https://<你的域名>/webhooks/github`，内容类型 JSON，密钥同 `GITHUB_WEBHOOK_SECRET`，事件勾 Pull requests、Pull request reviews、Issue comments。没配 webhook 也能用，Engine 每分钟轮询一次 PR 状态。
-7. 沙箱：生产用 Firecracker，准备方法和上线前要验证的事在 [docs/firecracker.md](docs/firecracker.md)。沙箱放在别的机器上见 [docs/sandbox-host.md](docs/sandbox-host.md)。
-8. 可选：在飞书里提需求（[docs/feishu.md](docs/feishu.md)，接之前先对文档）；一台只读备机（[docs/standby.md](docs/standby.md)）；监控把线上问题报到 `/webhooks/issues`；Prometheus 抓 `/metrics`。
+7. 沙箱：要隔离就用 Firecracker，准备方法和要验证的事在 [docs/firecracker.md](docs/firecracker.md)。沙箱放在别的机器上见 [docs/sandbox-host.md](docs/sandbox-host.md)。
+8. 可选：在飞书里提需求（[docs/feishu.md](docs/feishu.md)）；一台只读备机（[docs/standby.md](docs/standby.md)）；监控把线上问题报到 `/webhooks/issues`；Prometheus 抓 `/metrics`。
 
 Worker 用 codex CLI，要装在沙箱模板里。codex 只说 Responses 接口：接入支持就直接转发，只支持 Chat Completions 的接入由网关转换，细节见 [docs/poc.md](docs/poc.md)。
 
 ## 测试
 
 ```sh
-cargo test --workspace                 # 83 个测试，不需要网络
+cargo test --workspace                 # 85 个测试，不需要网络
 ACW_CODEX_POC=1 cargo test -p acw-engine --test codex -- --nocapture   # 需要装 codex CLI
 ```
 
@@ -100,4 +120,4 @@ ACW_CODEX_POC=1 cargo test -p acw-engine --test codex -- --nocapture   # 需要�
 
 ## 还没做的
 
-自动选主（Raft）、云沙箱（E2B、Daytona）、编译器级的代码索引、用模型做环境规划、多服务 VM 组、Router 自动拆计划、审查和写测试的评测集、飞书卡片、OpenTelemetry、密钥表接 KMS。完整列表、原因，以及已经做了但比设计简单的地方，在 [docs/status.md](docs/status.md)。
+以后可能做的：Router 自动拆计划、编译器级的代码索引、用模型做环境规划、审查和写测试的评测集、飞书卡片。有意不做的：自动选主（Raft）、云沙箱、密钥表接 KMS、OpenTelemetry、多服务 VM 组。完整列表和原因在 [docs/status.md](docs/status.md)。

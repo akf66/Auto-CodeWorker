@@ -756,6 +756,12 @@ impl Engine {
                         let base = self.base_of(&t, &p)?;
                         let tip = self.git.base_tip(&p.id, &base).await.ok().flatten();
                         if tip.is_some() && tip != t.base_sha {
+                            // the new commit may be this very pull request, merged between the two looks
+                            // (seen on GitHub with a squash merge): ask again before rebasing a merged branch
+                            if matches!(self.forge.pr_status(&p.slug, pr.number).await, Ok(PrStatus::Merged)) {
+                                self.on_merged(&t.id, "forge")?;
+                                continue;
+                            }
                             self.store.write(|tx| set_stage(tx, "engine", &t.id, Stage::Queued, "排队中", &format!("{base} 有新提交，自动变基并重新校验"), Some(Stage::Opening)))?;
                             self.kick();
                         }

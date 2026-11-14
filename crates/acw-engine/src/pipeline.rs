@@ -547,6 +547,14 @@ impl Engine {
             return Ok(None);
         }
         let p = self.project(&t.project)?;
+        // back here after a rebase with a pull request already open: if that one merged meanwhile, the
+        // task is finished, and opening a second pull request for the same change would be wrong
+        if let Some(pr) = &t.pr {
+            if matches!(self.forge.pr_status(&p.slug, pr.number).await, Ok(acw_git::forge::PrStatus::Merged)) {
+                self.on_merged(&t.id, "forge")?;
+                return Ok(Some(Halt::Blocked));
+            }
+        }
         let branch = t.branch.clone().ok_or_else(|| anyhow!("任务没有分支"))?;
         // never publish a branch that is behind its base: rebase, then every result is re-earned on the new commit
         self.git.sync(&p.id, &self.forge.remote(&p.repo)).await?;

@@ -1,0 +1,27 @@
+# 个人使用的配置：一台自己的机器，真实模型，真实 GitHub，codex 当 Worker。
+# 用真实 codex CLI、OrcaRouter 的模型和一个 GitHub 私有仓库跑通过（2026-11-14）。
+#
+#   export GITHUB_TOKEN=$(gh auth token)      # 要有仓库的 contents 和 pull requests 读写权限
+#   cargo build --release
+#   ./target/release/acw-engine serve --config config/acw.personal.toml
+#
+# 然后打开 http://127.0.0.1:8787 ：设置里加模型接入、给四个阶段选模型，项目里接入仓库。
+
+listen = "127.0.0.1:8787"               # 只监听本机
+data_dir = "./data"
+console_dir = "./console"
+public_url = "http://127.0.0.1:8787"
+gateway_url = "http://127.0.0.1:8787"
+auth = "none"                           # 不用登录。只在 listen 是本机地址时这样用
+
+[forge]
+kind = "github"
+token_env = "GITHUB_TOKEN"
+poll_seconds = 30                       # 不配 webhook，靠轮询发现 PR 被合并
+
+[sandbox]
+provider = "local"                      # 沙箱就是本机上的一个目录，没有隔离
+allow_unisolated = true                 # 自己的机器、自己的仓库可以这样用；codex 自带的 workspace-write 沙箱仍然开着
+
+[worker]
+agent = "codex"                         # 要先装好 codex CLI

@@ -45,7 +45,7 @@ retry_seconds = 60                      # 模型不可用时隔多久再试
 
 [feishu]
 webhook_env = "FEISHU_WEBHOOK"          # 出站通知：飞书自定义机器人的 webhook 地址；不配就只记录不发送
-# 入站消息（在飞书里给机器人发需求）。协议没有对着官方文档核对过，接之前先看 docs/feishu.md
+# 入站消息（在飞书里给机器人发需求）。协议对过官方文档，还没接过真实应用，见 docs/feishu.md
 base = "https://open.feishu.cn"
 app_id_env = "FEISHU_APP_ID"
 app_secret_env = "FEISHU_APP_SECRET"

@@ -295,7 +295,7 @@ async fn a_task_with_rollout_phases_ends_when_the_last_phase_is_confirmed() {
 
     // merged, but not finished: phase 1 has no URL, so a person judges it and it is theirs at once
     let t = h.ticket(&id);
-    assert_eq!((t.stage, t.mandate.rollout[0].state.as_str(), t.sandbox.is_none() || true), (Stage::RollingOut, "ready", true));
+    assert_eq!((t.stage, t.mandate.rollout[0].state.as_str()), (Stage::RollingOut, "ready"));
     assert!(h.eng.store.read(|v| v.queue_item(&format!("{id}:rollout"))).unwrap().is_some());
     assert!(h.eng.rollout_advance(&h.actor("yue"), &id).is_err());
     h.eng.rollout_advance(&lin, &id).unwrap();
